@@ -1,0 +1,17 @@
+dist/
+build/
+.env
+node_modules/
+tmp/
+.yarn/
+junit.xml
+coverage/
+sandbox.ts
+yarn-error.log
+sqltools_*
+.DS_Store
+tests-result.junit.xml
+result.xml
+junit.xml
+test-results/
+tsconfig.tsbuildinfo

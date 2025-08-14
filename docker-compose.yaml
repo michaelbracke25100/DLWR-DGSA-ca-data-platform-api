@@ -1,0 +1,79 @@
+services:
+  mssql:
+    container_name: mssqldataplatformapi
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    ports:
+      - '1433:1433'
+    volumes:
+      - DATABASE_STORE:/var/opt/mssql
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=S3CRETS3CREt1
+    healthcheck:
+      test: ['CMD', '/opt/mssql-tools/bin/sqlcmd', '-S', 'mssqldataplatformapi', '-U', 'sa', '-P', 'S3CRETS3CREt1', '-Q', 'SELECT 1']
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+  rabbitmq:
+    container_name: rabbitmqdataplatformapi
+    image: rabbitmq:4.0.2-management
+    ports:
+      - 15671:15671
+      - 15672:15672
+      - 15691:15691
+      - 15692:15692
+      - 25672:25672
+      - 4369:4369
+      - 5671:5671
+      - 5672:5672
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 10s
+      retries: 5
+  # orchestrator:
+  #   container_name: orchestratordataplatformapi
+  #   image: dgsacajoborchestrator:latest
+  #   environment:
+  #     - SQL_HOST=172.28.244.59
+  #     - SQL_DATABASE=SANTE-DTLKD-SQLDB04-JOBORCH
+  #     - AMQP_HOST=amqp://rabbitmqdataplatformapi:5672
+  #     - JOB_STORAGE_ACCOUNT_NAME=test
+  #     - ID_CLIENTID=dbc82ede-9bea-4371-93ad-b61c459af26b
+  #     - ENV=DEVELOPMENT
+  #   ports:
+  #     - 8080:8080
+  #   depends_on:
+  #     mssql:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+  # server:
+  #   container_name: dataplatformapi
+  #   build:
+  #     context: .
+  #   environment:
+  #     - SQL_HOST=172.28.244.59
+  #     - SQL_DATABASE=SANTE-DTLKD-SQLDB04-DATAPLATFORM
+  #     - CA_JOBORCHESTRATOR_URL=http://wiremock:4000
+  #     - ID_CLIENTID=dbc82ede-9bea-4371-93ad-b61c459af26b
+  #     - SYNAPSE_PIPELINE_ORACLE_ID=518A65A2-2155-47FB-B575-151322635C00
+  #     - SYNAPSE_PIPELINE_TRANSFORM_ID=3283EF47-6CCE-420B-AE9C-BF55C4A02241
+  #     - STORAGE_PUBLEXT_NAME=string
+  #     - STORAGE_PRIVINT_NAME=string
+  #     - KEYVAULT_URL=https://dg-kv-001.vault.azure.net/
+  #     - ENV=LOCAL
+  #     - SYNAPSE_ENDPOINT=string
+  #     - SYNAPSE_PIPELINE_NAME=string
+  #   ports:
+  #     - 8000:8000
+  #   depends_on:
+  #     mssql:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+
+volumes:
+  DATABASE_STORE:
+  OTHER_STORE:

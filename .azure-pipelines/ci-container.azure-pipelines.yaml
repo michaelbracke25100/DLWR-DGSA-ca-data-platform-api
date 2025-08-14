@@ -1,0 +1,82 @@
+trigger: none
+
+stages:
+  - stage: Tests
+    pool:
+      vmImage: 'ubuntu-latest'
+    displayName: Tests
+    jobs:
+      - job: docker_build
+        displayName: Build image
+
+        steps:
+          - checkout: self
+            clean: true
+
+          - script: |
+              docker build .
+            displayName: Docker Build
+
+      - job: linting
+        dependsOn: docker_build
+        condition: succeededOrFailed()
+        displayName: ESLint
+        steps:
+          - checkout: self
+            clean: true
+
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '22.x'
+            displayName: 'Install Node.js'
+
+          - script: |
+              npm install --global yarn
+              yarn install --frozen-lockfile
+            displayName: 'Install dependencies'
+
+          - script: |
+              yarn lint
+            displayName: 'Run Linting'
+
+      - job: jest_test
+        dependsOn: linting
+        condition: succeededOrFailed()
+        displayName: Unit Tests + Coverage report
+        steps:
+          - checkout: self
+            clean: true
+
+          - task: UseDotNet@2
+            displayName: 'Install .NET'
+            inputs:
+              version: 8.x
+
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '22.x'
+            displayName: 'Install Node.js'
+
+          - script: |
+              npm install --global yarn
+              yarn install --frozen-lockfile
+            displayName: 'Install dependencies'
+
+          - script: |
+              yarn test:ci
+            displayName: 'Run Tests'
+
+          - task: PublishCodeCoverageResults@2
+            condition: succeededOrFailed()
+            displayName: 'Publish code coverage results'
+            inputs:
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage/cobertura-coverage.xml'
+              failIfCoverageEmpty: true
+
+          - task: PublishTestResults@2
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: '**/junit.xml'
+              failTaskOnFailureToPublishResults: true
+              failTaskOnMissingResultsFile: true

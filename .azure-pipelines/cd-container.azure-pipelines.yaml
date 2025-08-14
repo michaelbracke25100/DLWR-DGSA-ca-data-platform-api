@@ -1,0 +1,41 @@
+trigger:
+  batch: true
+  branches:
+    include:
+      - 'main'
+  tags:
+    include:
+      - '*'
+
+stages:
+  - stage: Build
+    displayName: Build
+    jobs:
+      - job: Docker_Job
+        displayName: Build image
+        pool:
+          name: VM3
+        steps:
+          - checkout: self
+            clean: true
+
+          - task: AzureKeyVault@2
+            inputs:
+              azureSubscription: 'SANTE-DATALAKE-DEVOPS-DEVELOPMENT'
+              KeyVaultName: 'SANTE-DTLKD-KV01'
+              SecretsFilter: 'acr-user,acr-pass,acr-server'
+              RunAsPreJob: false
+
+          - script: |
+              docker build -t $(acr-server)/integration.$(Build.Repository.Name):$(Build.SourceBranchName) .
+            displayName: Docker Build
+
+          - script: |
+              docker login $(acr-server) --username $(acr-user) --password $(acr-pass)
+            displayName: Docker Login
+
+          - script: |
+              docker push $(acr-server)/integration.$(Build.Repository.Name):$(Build.SourceBranchName)
+              docker tag $(acr-server)/integration.$(Build.Repository.Name):$(Build.SourceBranchName) $(acr-server)/integration.$(Build.Repository.Name):latest
+              docker push $(acr-server)/integration.$(Build.Repository.Name):latest
+            displayName: Docker Push

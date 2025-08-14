@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "composite": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmitOnError": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "pretty": true,
+    "sourceMap": true,
+    "stripInternal": true,
+    "module": "CommonJS",
+    "strict": true,
+    "target": "ES2022",
+    "experimentalDecorators": true,
+    "strictPropertyInitialization": false,
+    "skipLibCheck": true,
+    "moduleResolution": "Node"
+  },
+  "include": [
+    "src/**/*.ts", // Include all TypeScript files in the 'src' directory and its subdirectories
+    "tests/**/*.ts" // Include all TypeScript files in the 'tests' directory and its subdirectories
+  ],
+  "exclude": [
+    "node_modules" // Exclude node_modules directory
+  ]
+}

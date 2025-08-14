@@ -1,0 +1,90 @@
+trigger:
+  batch: true
+  branches:
+    include:
+      - 'main'
+  tags:
+    include:
+      - '*'
+
+variables:
+  pool: VM3
+
+stages:
+  # - stage: Test
+  #   displayName: Test
+  #   jobs:
+  #     - job: Test
+  #       displayName: Test
+  #       pool:
+  #         name: $(pool)
+  #       steps:
+  #         - task: NodeTool@0
+  #           inputs:
+  #             versionSpec: '22.x'
+  #           displayName: 'Install Node.js'
+
+  #         - task: UseDotNet@2
+  #           displayName: 'Install .NET'
+  #           inputs:
+  #             version: 8.x
+
+  #         - script: |
+  #             npm install --global yarn
+  #           displayName: 'Install yarn'
+
+  #         - script: |
+  #             yarn install --frozen-lockfile
+  #           displayName: 'Install dependencies with frozen-lockfile'
+
+  #         - script: |
+  #             yarn test:ci
+  #           displayName: 'Run Tests'
+
+  #         - task: PublishCodeCoverageResults@2
+  #           condition: succeededOrFailed()
+  #           displayName: 'Publish code coverage results'
+  #           inputs:
+  #             summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage/cobertura-coverage.xml'
+  #             failIfCoverageEmpty: true
+
+  #         - task: PublishTestResults@2
+  #           condition: succeededOrFailed()
+  #           inputs:
+  #             testResultsFormat: 'JUnit'
+  #             testResultsFiles: '**/junit.xml'
+  #             failTaskOnFailureToPublishResults: true
+  #             failTaskOnMissingResultsFile: true
+
+  - stage: Build
+    displayName: Build
+    jobs:
+      - job: Docker_Job
+        displayName: Build image
+        pool:
+          name: $(pool)
+        steps:
+          - checkout: self
+            clean: true
+
+          - task: AzureKeyVault@2
+            inputs:
+              azureSubscription: 'SANTE-DATALAKE-DEVOPS-DEVELOPMENT'
+              KeyVaultName: 'SANTE-DTLKD-KV01'
+              SecretsFilter: 'acr-user,acr-pass,acr-server'
+              RunAsPreJob: false
+
+          - script: |
+              docker build -t $(acr-server)/integration.$(Build.Repository.Name):$(Build.SourceBranchName) .
+              docker images
+            displayName: Docker Build
+
+          - script: |
+              docker login $(acr-server) --username $(acr-user) --password $(acr-pass)
+            displayName: Docker Login
+
+          - script: |
+              docker push $(acr-server)/integration.$(Build.Repository.Name):$(Build.SourceBranchName)
+              docker tag $(acr-server)/integration.$(Build.Repository.Name):$(Build.SourceBranchName) $(acr-server)/integration.$(Build.Repository.Name):latest
+              docker push $(acr-server)/integration.$(Build.Repository.Name):latest
+            displayName: Docker Push
