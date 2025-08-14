@@ -4,6 +4,7 @@ import { PipelineRun } from '../db/pipeline_run.entity';
 import { PipelineRunOutput } from '../db/pipeline_run_output.entity';
 import { getConfig } from './config';
 import { DataObject } from '../db/data_object.entity';
+import { DataObjectRun } from '../db/dataobject_run.entity';
 import { LinkedService } from '../db/linkedservice.entity';
 import { Metadata } from '../db/metadata.entity';
 import { PipelineRunLog } from '../db/pipeline_run_log.entity';
@@ -34,7 +35,7 @@ const datasource = new DataSource({
       },
     }),
   port: 1433,
-  entities: [Pipeline, PipelineRun, PipelineRunLog, PipelineRunOutput, LinkedService, DataObject, Metadata],
+  entities: [Pipeline, PipelineRun, PipelineRunLog, PipelineRunOutput, LinkedService, DataObject, DataObjectRun, Metadata],
   migrationsRun: true,
   migrations: ['./build/db/migrations/*.js'],
   schema: 'dbo',

@@ -25,6 +25,7 @@ import { AzureSynapseController, IAzureSynapseController } from './controllers/A
 import { AzureSynapseService } from './services/AzureSynapseService';
 import StorageService from './services/StorageService';
 import PipelineRunLogEntityService from './services/PipelineRunLogEntityService';
+import DataObjectRunEntityService from './services/DataObjectRunEntityService';
 import { UserType } from './schemas/user';
 
 // * decorate the request so that performance is better and we pass the env variable everywhere
@@ -97,6 +98,7 @@ datasource
       const pipelinerunlog_entity_service = new PipelineRunLogEntityService(datasource);
       const pipelinerunoutput_entity_service = new PipelineRunOutputEntityService(datasource);
       const dataobject_entity_service = new DataObjectEntityService(datasource);
+      const dataobjectrun_entity_service = new DataObjectRunEntityService(datasource);
       const linkedservice_entity_service = new LinkedServiceEntityService(datasource);
       const metadata_entity_service = new MetadataEntityService(datasource);
       const azuresynapse_service = new AzureSynapseService(getConfig().SYNAPSE_ENDPOINT, getConfig().ID_CLIENTID, getConfig().SYNAPSE_PIPELINE_NAME);
@@ -114,7 +116,17 @@ datasource
         getConfig().SYNAPSE_PIPELINE_ORACLE_ID,
         getConfig().SYNAPSE_PIPELINE_TRANSFORM_ID,
       );
-      const dataobject_controller = new DataObjectController(dataobject_entity_service, pipeline_entity_service, metadata_entity_service, storage_service, getConfig().STORAGE_PRIVINT_NAME, getConfig().STORAGE_PUBLEXT_NAME);
+      const dataobject_controller = new DataObjectController(
+        dataobject_entity_service,
+        pipeline_entity_service,
+        metadata_entity_service,
+        storage_service,
+        getConfig().STORAGE_PRIVINT_NAME,
+        getConfig().STORAGE_PUBLEXT_NAME,
+        dataobjectrun_entity_service,
+        joborchestrator_service,
+        getConfig().SYNAPSE_PIPELINE_DOWNLOAD_ID,
+      );
       const linkedservice_controller = new LinkedServiceController(linkedservice_entity_service, keyvault_service, pipeline_entity_service, azuresynapse_service);
       const azuresynapse_controller = new AzureSynapseController(azuresynapse_service, getConfig().SYNAPSE_PIPELINE_NAME);
       const sqlvalidation_controller = new SqlValidationController(datasource.manager);

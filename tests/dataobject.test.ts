@@ -7,6 +7,7 @@ import JobOrchestratorService from '../src/services/JobOrchestratorService';
 import {DataObject} from '../src/db/data_object.entity';
 import DataObjectEntityService from '../src/services/DataObjectEntityService';
 import {DataObjectController} from '../src/controllers/DataObjectController';
+import DataObjectRunEntityService from '../src/services/DataObjectRunEntityService';
 
 import {v4 as uuidv4} from 'uuid';
 import {LinkedService} from '../src/db/linkedservice.entity';
@@ -23,6 +24,7 @@ import KeyvaultService from '../src/services/KeyvaultService';
 import StorageService from '../src/services/StorageService';
 import {AzureSynapseService} from '../src/services/AzureSynapseService';
 import {PipelineRunLog} from '../src/db/pipeline_run_log.entity';
+import {DataObjectManagedBy} from '../src/schemas/dataobject.entity';
 jest.mock('../src/services/JobOrchestratorService'); // Automatically mocks the module
 describe('Data Object', () => {
   jest.setTimeout(600000);
@@ -43,6 +45,7 @@ describe('Data Object', () => {
   let linkedservice_controller: LinkedServiceController;
   let pipeline_controller: PipelineController;
   let dataobject_controller: DataObjectController;
+  let dataobjectrun_service: DataObjectRunEntityService;
   let mssql_container: StartedMSSQLServerContainer;
 
   beforeAll(async () => {
@@ -74,6 +77,7 @@ describe('Data Object', () => {
     joborchestrator_service = new JobOrchestratorService('', '');
     // Mock the method that is called within the controller
     joborchestrator_service.createJobRun = jest.fn().mockResolvedValue({run_id: uuidv4()});
+    dataobjectrun_service = {createDataObjectRun: jest.fn().mockResolvedValue(undefined)} as unknown as DataObjectRunEntityService;
     keyvault_service = new KeyvaultService('', '', '');
     keyvault_service.getSecretValue = jest.fn().mockResolvedValue(undefined);
     keyvault_service.setSecret = jest.fn().mockResolvedValue({name: 'name', properties: {vaultUrl: `url/name`, name: 'name'}});
@@ -82,7 +86,17 @@ describe('Data Object', () => {
     pipeline_service = new PipelineEntityService(datasource);
     linkedservice_entity_service = new LinkedServiceEntityService(datasource);
     metadata_entity_service = new MetadataEntityService(datasource);
-    dataobject_controller = new DataObjectController(dataobject_service, pipeline_service, metadata_entity_service, storage_service, '', '');
+    dataobject_controller = new DataObjectController(
+      dataobject_service,
+      pipeline_service,
+      metadata_entity_service,
+      storage_service,
+      '',
+      '',
+      dataobjectrun_service,
+      joborchestrator_service,
+      job_id,
+    );
     azuresynapse_service = new AzureSynapseService('', '', '');
     pipeline_controller = new PipelineController(pipeline_service, keyvault_service, linkedservice_entity_service, metadata_entity_service);
     linkedservice_controller = new LinkedServiceController(linkedservice_entity_service, keyvault_service, pipeline_service, azuresynapse_service);
@@ -128,6 +142,10 @@ describe('Data Object', () => {
     }
   });
 
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   afterAll(async () => {
     await datasource.destroy();
     await mssql_container.stop();
@@ -161,5 +179,29 @@ describe('Data Object', () => {
   it('Check destination should return false', async () => {
     const destination_check = await dataobject_controller.checkDestination(data_objects_correct[0].destination_name, pipeline_id);
     expect(destination_check).toBe(false);
+  });
+
+  it('Should trigger dataobject run when enabling download APIs', async () => {
+    const [dataobject] = await dataobject_controller.createPipelineDataObjects(pipeline_id, data_objects_correct, ['test']);
+    const update_metadata: MetadataSchema = {
+      business_unit: 'bu',
+      eurovoc_subjects: 'eurovoc_subjects',
+      it_solution: 'it_solution',
+      business_data_owner: 'owner',
+      business_data_steward: 'steward',
+      domain: 'domain',
+      sub_domain: 'sub_domain',
+      technical_data_steward: 'tech',
+    };
+    await dataobject_controller.updateDataObjectMetadata(
+      dataobject.dataobject_id,
+      {name: 'tester', user_id: '1'},
+      update_metadata,
+      ['test'],
+      DataObjectManagedBy.PIPELINE,
+      true,
+    );
+    expect(joborchestrator_service.createJobRun).toHaveBeenCalled();
+    expect((dataobjectrun_service.createDataObjectRun as jest.Mock).mock.calls.length).toBe(1);
   });
 });
