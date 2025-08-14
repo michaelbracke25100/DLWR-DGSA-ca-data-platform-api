@@ -1,16 +1,21 @@
-import { BlobBeginCopyFromURLResponse, BlobDeleteIfExistsResponse, AppendBlobAppendBlockResponse, BlockBlobCommitBlockListResponse } from '@azure/storage-blob';
-import { DataObject, DataObjectManagedBy as DataObjectManagedByEntity } from '../db/data_object.entity';
-import { DataObjectManagedBy, DataObjectState } from '../schemas/dataobject.entity';
-import { metadata_entity_schema, MetadataSchema } from '../schemas/metadata.entity';
+import {
+  BlobBeginCopyFromURLResponse,
+  BlobDeleteIfExistsResponse,
+  AppendBlobAppendBlockResponse,
+  BlockBlobCommitBlockListResponse,
+} from '@azure/storage-blob';
+import {DataObject, DataObjectManagedBy as DataObjectManagedByEntity} from '../db/data_object.entity';
+import {DataObjectManagedBy, DataObjectState} from '../schemas/dataobject.entity';
+import {MetadataSchema} from '../schemas/metadata.entity';
 import DataObjectEntityService from '../services/DataObjectEntityService';
 import MetadataEntityService from '../services/MetadataEntityService';
 import PipelineEntityService from '../services/PipelineEntityService';
 import StorageService from '../services/StorageService';
-import { CustomError } from '../utilities/utils';
-import { PipelineState } from '../schemas/pipeline.entity';
-import { randomUUID } from 'crypto';
-import { AzureSynapseService } from '../services/AzureSynapseService';
-import { getConfig } from '../config/config';
+import {CustomError} from '../utilities/utils';
+import {PipelineState} from '../schemas/pipeline.entity';
+import {randomUUID} from 'crypto';
+import DataObjectRunEntityService from '../services/DataObjectRunEntityService';
+import JobOrchestratorService from '../services/JobOrchestratorService';
 
 export interface IDataObjectController {
   createPipelineDataObjects(pipeline_id: string, data_objects_parameters: { origin_name: string; destination_name: string }[], user_groups: string[] | null): Promise<DataObject[]>;
@@ -37,14 +42,30 @@ export class DataObjectController implements IDataObjectController {
   private storage_service: StorageService;
   private st_privint_name: string;
   private st_publext_name: string;
+  private dataobjectrun_entity_service: DataObjectRunEntityService;
+  private joborchestrator_service: JobOrchestratorService;
+  private download_job_id: string;
 
-  constructor(dataobject_entity_service: DataObjectEntityService, pipeline_entity_service: PipelineEntityService, metadata_entity_service: MetadataEntityService, storage_service: StorageService, st_privint_name: string, st_publext_name: string) {
+  constructor(
+    dataobject_entity_service: DataObjectEntityService,
+    pipeline_entity_service: PipelineEntityService,
+    metadata_entity_service: MetadataEntityService,
+    storage_service: StorageService,
+    st_privint_name: string,
+    st_publext_name: string,
+    dataobjectrun_entity_service: DataObjectRunEntityService,
+    joborchestrator_service: JobOrchestratorService,
+    download_job_id: string,
+  ) {
     this.dataobject_entity_service = dataobject_entity_service;
     this.pipeline_entity_service = pipeline_entity_service;
     this.metadata_entity_service = metadata_entity_service;
     this.storage_service = storage_service;
     this.st_privint_name = st_privint_name;
     this.st_publext_name = st_publext_name;
+    this.dataobjectrun_entity_service = dataobjectrun_entity_service;
+    this.joborchestrator_service = joborchestrator_service;
+    this.download_job_id = download_job_id;
   }
 
   async createPipelineDataObjects(pipeline_id: string, data_objects_parameters: { origin_name: string; destination_name: string }[], user_groups: string[]): Promise<DataObject[]> {
@@ -236,7 +257,7 @@ export class DataObjectController implements IDataObjectController {
     return { status: 'SUCCESS', message: 'List committed sucessfully.' };
   }
 
-  async handleParquet(dataobject: { name: string }, result: { is_enabled_for_download_apis: boolean }): Promise<void> {
+  async handleParquet(dataobject: {name: string}, result: {dataobject_id?: string; modified_by?: object; is_enabled_for_download_apis: boolean}): Promise<void> {
     const PARQUET_EXT = '.parquet';
     const container = this.st_publext_name;
     const folder = 'files';
@@ -247,7 +268,30 @@ export class DataObjectController implements IDataObjectController {
 
     // If downloads are enabled, trigger the pipeline and return
     if (result?.is_enabled_for_download_apis) {
-      // we should create a dataobject run to initiate the COPY activity on the storage accounts
+      try {
+        const parameters = {
+          name,
+          dataobject_id: result.dataobject_id,
+          parameters: {
+            queued_time: new Date().toISOString(),
+            storage_privint_name: this.st_privint_name,
+            storage_publext_name: this.st_publext_name,
+            blob_name: name,
+          },
+        };
+        const run = await this.joborchestrator_service.createJobRun(this.download_job_id, parameters);
+        if (run?.run_id && result.dataobject_id) {
+          await this.dataobjectrun_entity_service.createDataObjectRun(
+            this.download_job_id,
+            run.run_id,
+            result.dataobject_id,
+            result.modified_by ?? {},
+            parameters,
+          );
+        }
+      } catch (err) {
+        console.log('Failed to trigger download pipeline', {err});
+      }
       return;
     }
 
@@ -257,20 +301,16 @@ export class DataObjectController implements IDataObjectController {
 
     try {
       // Check existence in parallel
-      const exists = await Promise.all(
-        targets.map(f => this.storage_service.blobExists(container, folder, f))
-      );
+      const exists = await Promise.all(targets.map(f => this.storage_service.blobExists(container, folder, f)));
 
       // Delete only those that exist (run deletions in parallel; don't fail the whole call if one delete fails)
-      const deletions = targets
-        .filter((_, i) => exists[i])
-        .map(f => this.storage_service.deleteBlob(container, folder, f));
+      const deletions = targets.filter((_, i) => exists[i]).map(f => this.storage_service.deleteBlob(container, folder, f));
 
       if (deletions.length > 0) {
         await Promise.allSettled(deletions);
       }
     } catch (err) {
-      console.log('Failed to clean up download files', { base, err });
+      console.log('Failed to clean up download files', {base, err});
     }
   }
 }

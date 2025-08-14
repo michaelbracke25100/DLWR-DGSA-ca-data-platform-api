@@ -20,7 +20,8 @@ const configSchema = z.object({
   SYNAPSE_ENDPOINT: z.string().min(1),
   SYNAPSE_PIPELINE_NAME: z.string().min(1),
   SYNAPSE_PIPELINE_ORACLE_ID: z.string().min(1),
-  SYNAPSE_PIPELINE_TRANSFORM_ID: z.string().min(1)
+  SYNAPSE_PIPELINE_TRANSFORM_ID: z.string().min(1),
+  SYNAPSE_PIPELINE_DOWNLOAD_ID: z.string().min(1),
 });
 
 export type Config = z.infer<typeof configSchema>;
